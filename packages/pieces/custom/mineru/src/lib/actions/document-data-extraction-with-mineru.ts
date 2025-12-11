@@ -28,7 +28,7 @@ export const getDocumentContent = createAction({
     }),
     backend: Property.StaticDropdown({
         displayName: 'Backend for parsing',
-        description: 'pipeline: More general, vlm-transformers:  More general, but slower, vlm-mlx-engine: Faster than transformers (need apple silicon and macOS 13.5+), vlm-vllm-async-engine: Faster (vllm-engine, need vllm installed), vlm-lmdeploy-engine: Faster (lmdeploy-engine, need lmdeploy installed), vlm-http-client: Faster (client suitable for openai-compatible servers)'
+        description: 'pipeline: More general, vlm-transformers:  More general, but slower, vlm-mlx-engine: Faster than transformers (need apple silicon and macOS 13.5+), vlm-vllm-async-engine: Faster (vllm-engine, need vllm installed), vlm-lmdeploy-engine: Faster (lmdeploy-engine, need lmdeploy installed), vlm-http-client: Faster (client suitable for openai-compatible servers)',
         required: true,
         defaultValue: 'pipeline',
         options: {
@@ -129,7 +129,7 @@ export const getDocumentContent = createAction({
     }),
     startPageId: Property.Number({
         displayName: 'Start page',
-        description: 'The starting page for PDF parsing, beginning from 0'
+        description: 'The starting page for PDF parsing, beginning from 0',
         required: false,
         defaultValue: 0,
     }),
