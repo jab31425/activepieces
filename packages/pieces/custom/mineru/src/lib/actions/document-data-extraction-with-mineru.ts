@@ -1,7 +1,8 @@
 import { createAction, Property } from '@activepieces/pieces-framework';
+import { httpClient, HttpMethod } from '@activepieces/pieces-common';
+import mime from 'mime-types';
 
 export const getDocumentContent = createAction({
-  // auth: check https://www.activepieces.com/docs/developers/piece-reference/authentication,
   name: 'minerUDocumentDataExtraction',
   displayName: 'Document content extraction with MinerU',
   description: 'Extract the content of the given document with MinuerU',
@@ -15,48 +16,25 @@ export const getDocumentContent = createAction({
         description: 'base64 file from readFile piece',
         required: true,
     }),
-    mimeType: Property.ShortText({
-        displayName: 'MIME Type',
-        required: true,
-        defaultValue: 'application/pdf',
-    }),
     langList: Property.ShortText({
         displayName: 'Document language',
         description: 'Improves OCR accuracy with "pipeline" backend only. Supported values : ch , ch_server, ch_lite, en, korean, japan, chinese_cht, ta, te, ka, th, el, latin, arabic, east_slavic, cyrillic, devanagari',
-        required: true,
-        defaultValue: 'latin',
+        required: false,
+        defaultValue: '',
     }),
     backend: Property.StaticDropdown({
         displayName: 'Backend for parsing',
         description: 'pipeline: More general, vlm-transformers:  More general, but slower, vlm-mlx-engine: Faster than transformers (need apple silicon and macOS 13.5+), vlm-vllm-async-engine: Faster (vllm-engine, need vllm installed), vlm-lmdeploy-engine: Faster (lmdeploy-engine, need lmdeploy installed), vlm-http-client: Faster (client suitable for openai-compatible servers)',
         required: true,
-        defaultValue: 'pipeline',
+        defaultValue: 'vlm-http-client',
         options: {
             options: [
-                {
-                    label: 'pipeline',
-                    value: 'pipeline',
-                },
-                {
-                    label: 'vlm-transformers',
-                    value: 'vlm-transformers',
-                },
-                {
-                    label: 'vlm-mlx-engine',
-                    value: 'vlm-mlx-engine',
-                },
-                {
-                    label: 'vlm-vllm-async-engine',
-                    value: 'vlm-vllm-async-engine',
-                },
-                {
-                    label: 'vlm-lmdeploy-engine',
-                    value: 'vlm-lmdeploy-engine',
-                },
-                {
-                    label: 'vlm-http-client',
-                    value: 'vlm-http-client',
-                },
+                { label: 'pipeline', value: 'pipeline' },
+                { label: 'vlm-transformers', value: 'vlm-transformers' },
+                { label: 'vlm-mlx-engine', value: 'vlm-mlx-engine' },
+                { label: 'vlm-vllm-async-engine', value: 'vlm-vllm-async-engine' },
+                { label: 'vlm-lmdeploy-engine', value: 'vlm-lmdeploy-engine' },
+                { label: 'vlm-http-client', value: 'vlm-http-client' },
             ],
         },
     }),
@@ -72,18 +50,9 @@ export const getDocumentContent = createAction({
         defaultValue: 'auto',
         options: {
             options: [
-                {
-                    label: 'auto',
-                    value: 'auto',
-                },
-                {
-                    label: 'txt',
-                    value: 'txt',
-                },
-                {
-                    label: 'ocr',
-                    value: 'ocr',
-                },
+                { label: 'auto', value: 'auto' },
+                { label: 'txt', value: 'txt' },
+                { label: 'ocr', value: 'ocr' },
             ],
         },
     }),
@@ -141,40 +110,64 @@ export const getDocumentContent = createAction({
     }),
   },
   async run(context) {
-    const { apiServerUrl, file, mimeType, langList, backend, backendServerUrl, parseMethod, formulaEnable, tableEnable, returnMD, returnMiddleJson, returnModelOutput, returnContentList, returnImages, responseFormatZip, startPageId, endPageId } = context.propsValue;
+    const { apiServerUrl, file, langList, backend, backendServerUrl, parseMethod, formulaEnable, tableEnable, returnMD, returnMiddleJson, returnModelOutput, returnContentList, returnImages, responseFormatZip, startPageId, endPageId } = context.propsValue;
 
-    // Conversion base64 en Uint8Array -> Blob
-    const binaryString = atob(file.base64);
-    const len = binaryString.length;
-    const bytes = new Uint8Array(len);
-    for (let i = 0; i < len; i++)
-        bytes[i] = binaryString.charCodeAt(i);
-    const blob = new Blob([bytes], { type: mimeType });
-
-    // Création FormData
+    //Determine the MIME type
+    const mimeType = file.extension ? mime.lookup(file.extension) || 'application/octet-stream' : 'application/octet-stream';
+    const blob = new Blob([file.data as unknown as ArrayBuffer], {
+         type: mimeType,
+    });
     const form = new FormData();
+    
     form.append('files', blob, file.filename);
-    form.append('lang_list', String(langList));
-    form.append('backend', String(backend));
-    form.append('parse_method', String(parseMethod));
+    if (langList) form.append('lang_list', langList);
+    if (backend) form.append('backend', backend);
+    if (parseMethod) form.append('parse_method', parseMethod);
+    if (backendServerUrl) form.append('server_url', backendServerUrl);
+    if (startPageId) form.append('start_page_id', String(startPageId));
+    if (endPageId) form.append('end_page_id', String(endPageId));
     form.append('formula_enable', formulaEnable ? 'true' : 'false');
     form.append('table_enable', tableEnable ? 'true' : 'false');
-    if (backendServerUrl && backendServerUrl != null && backendServerUrl != '')
-        form.append('server_url', String(backendServerUrl));
     form.append('return_md', returnMD ? 'true' : 'false');
     form.append('return_middle_json', returnMiddleJson ? 'true' : 'false');
     form.append('return_model_output', returnModelOutput ? 'true' : 'false');
     form.append('return_content_list', returnContentList ? 'true' : 'false');
     form.append('return_images', returnImages ? 'true' : 'false');
     form.append('response_format_zip', responseFormatZip ? 'true' : 'false');
-    form.append('start_page_id', String(startPageId));
-    form.append('end_page_id', String(endPageId));
 
-    // Envoi vers MinerU
-    const response = await fetch(`${apiServerUrl}/file_parse`, {
-        method: 'POST',
-        body: form,
+    const response = await httpClient.sendRequest({
+        url: `${apiServerUrl}/file_parse`,
+        method: HttpMethod.POST,
+        headers: {
+            'Content-Type': 'multipart/form-data',
+        },
+        body: form, // httpClient knows how to handle FormData correctly
     });
-    return await response.json();
+    
+    // Error Handling
+    if (response.status >= 300) {
+        throw new Error(`MinerU API request failed with status ${response.status}: ${JSON.stringify(response.body)}`);
+    }
+
+    // Handle ZIP response format
+    if (responseFormatZip) {
+        // Since httpClient returns the body directly, if it was a ZIP, it's a Buffer/Uint8Array
+        // We ensure it's returned as a file object
+        const zipData = response.body; 
+
+        if (zipData instanceof Buffer || zipData instanceof Uint8Array) {
+            return {
+                filename: `${file.filename}_mineru_result.zip`,
+                data: Buffer.from(zipData).toString('base64'),
+                extension: 'zip',
+            };
+        } else {
+             // Handle case where API might not return binary despite request
+             throw new Error("Expected ZIP file response but received non-binary data.");
+        }
+    }
+
+    // Default JSON response
+    return await response.body;
   },
 });
